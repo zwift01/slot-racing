@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<meta name="description" content="Kamera-basierte Zeitmessung für Slot-Car-Rennen">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<title>Slot Racing – Renn-App</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#151f30;--muted:#9aa9bd;--line:#29364a;--accent:#38bdf8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4fb;font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}header{padding:18px 16px 12px;background:#111b2b;border-bottom:1px solid var(--line)}h1{font-size:21px;margin:0 0 4px}header p{margin:0;color:var(--muted);font-size:13px}.wrap{max-width:900px;margin:auto;padding:14px;display:grid;gap:13px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:13px}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.row>*{flex:1}.btn,select{background:#26364d;color:#fff;border:1px solid #3a4c66;border-radius:10px;padding:11px 13px;font-weight:650;font-size:14px}.btn.primary{background:#075985;border-color:#0284c7}.btn:disabled{opacity:.45}.small{font-size:12px;color:var(--muted)}label{display:block;color:#c7d3e3;font-size:13px;margin-bottom:6px}.videoBox{position:relative;background:#05080e;border-radius:12px;overflow:hidden;aspect-ratio:16/9;display:grid;place-items:center}video,canvas{position:absolute;width:100%;height:100%;inset:0;object-fit:contain}canvas{pointer-events:auto}.placeholder{color:#9aa9bd;text-align:center;padding:20px}.status{font-size:13px;color:#b7c7da;margin-top:9px}.colors{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.colorBtn{border:2px solid #46546a;border-radius:11px;padding:10px 6px;background:#202d40;color:#fff;display:flex;align-items:center;gap:8px;justify-content:center;font-weight:650}.colorBtn.active{border-color:#fff;box-shadow:0 0 0 2px #38bdf8}.dot{width:15px;height:15px;border-radius:50%;border:1px solid #ffffff70;display:inline-block;flex:none}.readout{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.tile{background:#0d1726;border:1px solid var(--line);border-radius:10px;padding:9px;text-align:center}.tile b{display:block;font-size:13px}.tile span{font-size:12px;color:var(--muted)}.note{border-left:3px solid #eab308;padding:9px 11px;background:#292313;border-radius:7px;color:#f5e7bb;font-size:13px;line-height:1.45}details summary{cursor:pointer;font-weight:650}input[type=range]{width:100%}footer{color:var(--muted);font-size:12px;text-align:center;padding:4px 12px 20px} @media(min-width:700px){.mainGrid{display:grid;grid-template-columns:1.5fr 1fr;gap:13px;align-items:start}.colors{grid-template-columns:repeat(2,1fr)}}
+
+.lapGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.lapCard{background:#0d1726;border:1px solid var(--line);border-radius:11px;padding:10px}
+.lapCard b{display:block}.lapCard .muted{font-size:12px;color:var(--muted)}
+.lapCard .time{font-size:19px;font-weight:750;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:3px 7px;border-radius:20px;background:#26364d;font-size:11px;color:#dbeafe}
+input[type=text]{width:100%;background:#0d1726;color:#fff;border:1px solid #3a4c66;border-radius:9px;padding:9px}
+@media(min-width:700px){.lapGrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style></head>
+<body>
+<header><h1>🏁 Slot Racing · Renn-App</h1><p>Version 0.3 · Kamera, Farbtracking und erste Rundenzeitmessung</p></header>
+<main class="wrap">
+<div class="mainGrid">
+<section class="panel">
+ <div class="row" style="margin-bottom:10px"><button class="btn primary" id="start">Kamera starten</button><button class="btn" id="stop" disabled>Kamera stoppen</button></div>
+ <div class="videoBox" id="videoBox"><div class="placeholder" id="placeholder">Kamera noch nicht gestartet<br><span class="small">Bitte Tablet-Kamera freigeben</span></div><video id="video" autoplay muted playsinline></video><canvas id="overlay"></canvas></div>
+ <div class="status" id="status">Status: wartet auf Kamerafreigabe</div>
+ <div class="note" id="cameraHelp" style="margin-top:9px">Tippe auf „Kamera starten“. Chrome sollte dann nach der Kamerafreigabe fragen. Falls keine Abfrage erscheint, prüfen wir zuerst die Browser-Berechtigungen und ob die Seite über HTTPS geöffnet wurde.</div>
+ <div class="readout"><div class="tile"><b id="fps">–</b><span>Analyse-FPS</span></div><div class="tile"><b id="found">0 / 6</b><span>Farben erkannt</span></div><div class="tile"><b id="resolution">–</b><span>Kameraauflösung</span></div></div>
+</section>
+<section class="panel">
+ <h3 style="margin:0 0 5px;font-size:16px">1 · Farbe auswählen</h3><p class="small" style="margin:0 0 10px">Wähle eine Fahrzeugfarbe und tippe anschließend im Kamerabild möglichst mittig auf den passenden 20 × 20-mm-Aufkleber.</p>
+ <div class="colors" id="colors"></div>
+ <div style="margin-top:13px"><button class="btn primary" id="detect" disabled>Farberkennung starten</button> <button class="btn" id="clear">Kalibrierung löschen</button></div>
+ <p class="small" id="calStatus">Noch keine Farben kalibriert.</p>
+ <div style="margin-top:12px"><label for="tol">Farbtoleranz <b id="tolVal">30</b></label><input id="tol" type="range" min="12" max="65" value="30"><p class="small">Bei zu vielen falschen Treffern verringern; wenn der Aufkleber nicht erkannt wird, vorsichtig erhöhen.</p></div>
+</section>
+</div>
+<section class="panel">
+ <h3 style="margin:0 0 8px;font-size:16px">2 · Erkennungsübersicht</h3><div id="results" class="small">Nach der Kalibrierung erscheinen hier die erkannten Farbmarkierungen.</div>
+</section>
+
+<section class="panel">
+ <h3 style="margin:0 0 8px;font-size:16px">3 · Rennen & Zeitmessung</h3>
+ <div class="row" style="margin-bottom:10px">
+  <button class="btn primary" id="raceStart">Rennen starten</button>
+  <button class="btn" id="racePause" disabled>Pause</button>
+  <button class="btn" id="raceReset">Zurücksetzen</button>
+ </div>
+ <div class="row" style="margin-bottom:10px">
+  <div><label for="lapTarget">Rennlänge</label><select id="lapTarget"><option value="0">Freies Training</option><option value="5">5 Runden</option><option value="10" selected>10 Runden</option><option value="20">20 Runden</option><option value="25">25 Runden</option><option value="50">50 Runden</option></select></div>
+  <div><label for="linePos">Start-/Ziellinie (Bildhöhe)</label><input id="linePos" type="range" min="10" max="90" value="50"><div class="small"><span id="lineVal">50</span>% · Linie im Kamerabild</div></div>
+ </div>
+ <div class="note" style="margin-bottom:10px">Für diesen ersten Zeitmess-Test muss die Kamera fest stehen und die Autos müssen die eingeblendete Linie im Bild vollständig überqueren. Die Linie liegt zunächst waagerecht. Fährt die Strecke anders durchs Bild, drehen wir die Ausrichtung im nächsten Schritt passend.</div>
+ <div class="row" style="margin-bottom:10px"><div class="tile"><b id="raceClock">00:00.000</b><span>Rennzeit</span></div><div class="tile"><b id="raceState">Nicht gestartet</b><span>Status</span></div><div class="tile"><b id="raceLeader">–</b><span>Führung</span></div></div>
+ <div id="lapBoard" class="lapGrid"></div>
+ <p class="small" id="lapHint">Starte die Kamera, kalibriere die Fahrzeugfarben und starte anschließend das Rennen.</p>
+</section>
+
+<section class="panel">
+ <details><summary>Hinweise für den ersten Test</summary><ul class="small" style="line-height:1.6;padding-left:20px"><li>Tablet möglichst fest und senkrecht von oben befestigen. Zuerst nur einen geraden Streckenabschnitt ins Bild nehmen.</li><li>Aufkleber matt, sauber und möglichst plan auf dem Autodach befestigen. Keine glänzende Folie verwenden.</li><li>Gleichmäßiges Licht nutzen und direkte Spiegelungen/Schatten vermeiden.</li><li>Für die Kalibrierung den Aufkleber groß genug im Bild zeigen und direkt auf seine Mitte tippen.</li><li>Schwarz und Weiß sind schwieriger als kräftige Farben: Die App nutzt dafür Helligkeitswerte. Ein grauer Streckenbelag hilft, garantiert aber noch keine sichere Trennung.</li></ul></details>
+</section>
+<div class="note"><b>Prototyp-Hinweis:</b> Diese Testversion zählt erkannte Überquerungen der virtuellen Linie je Farbe und misst Rundenzeiten. Die Zuordnung erfolgt aktuell über die jeweilige Markerfarbe. Bei Überdeckungen, Fehl-Erkennungen oder mehreren Überquerungen in kurzer Folge kann es noch zu Zählfehlern kommen. Bitte zunächst mit wenigen Autos testen.</div>
+</main><footer>Lokale Verarbeitung im Browser · Es werden keine Kamerabilder hochgeladen.</footer>
+<script>
+(()=>{
+const names=[['Rot','#ef4444'],['Blau','#3b82f6'],['Gelb','#eab308'],['Grün','#22c55e'],['Schwarz','#111827'],['Weiß','#f8fafc']];
+const video=document.getElementById('video'),canvas=document.getElementById('overlay'),ctx=canvas.getContext('2d',{willReadFrequently:true}),sample=document.createElement('canvas'),sctx=sample.getContext('2d',{willReadFrequently:true});
+let stream=null,cal={},selected=0,running=false,last=0,frames=0,fpsAt=performance.now(),raf=0,latest=[];
+let raceOn=false,raceStartAt=0,raceElapsed=0,raceTick=0;
+const raceData=names.map((n,i)=>({laps:0,lastCross:0,lastY:null,lastLapAt:0,best:null,previousY:null,driver:n[0]}));
+const raceNow=()=>raceOn?performance.now()-raceStartAt+raceElapsed:raceElapsed;
+const fmt=ms=>{if(ms==null||!isFinite(ms))return '–';let m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60,mm=Math.floor(ms)%1000;return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+'.'+String(mm).padStart(3,'0')};
+function renderRace(){
+ $('raceClock').textContent=fmt(raceNow());
+ const active=raceData.filter((r,i)=>cal[i]);
+ $('raceLeader').textContent=active.length?names[active.slice().sort((a,b)=>b.laps-a.laps)[0]===undefined?0:raceData.indexOf(active.slice().sort((a,b)=>b.laps-a.laps)[0])][0]:'–';
+ $('lapBoard').innerHTML=names.map((n,i)=>{const r=raceData[i];if(!cal[i])return '';return `<div class="lapCard"><div style="display:flex;justify-content:space-between;gap:6px"><b><i class="dot" style="background:${n[1]};vertical-align:middle"></i> ${n[0]}</b><span class="pill">${r.laps} Runden</span></div><div class="time">${fmt(r.lastLapMs)}</div><div class="muted">Letzte Runde · Bestzeit ${fmt(r.best)}</div></div>`}).join('');
+}
+function raceLoop(){if(!raceOn)return;renderRace();raceTick=requestAnimationFrame(raceLoop)}
+function resetRace(){raceOn=false;cancelAnimationFrame(raceTick);raceElapsed=0;raceStartAt=0;raceData.forEach(r=>{r.laps=0;r.lastCross=0;r.lastY=null;r.lastLapAt=0;r.lastLapMs=null;r.best=null;r.previousY=null});$('raceState').textContent='Nicht gestartet';$('raceStart').disabled=false;$('racePause').disabled=true;$('racePause').textContent='Pause';renderRace()}
+
+const $=id=>document.getElementById(id);
+function setStatus(t){$('status').textContent='Status: '+t}
+function setCameraHelp(t){$('cameraHelp').textContent=t}
+function cameraCapability(){const secure=window.isSecureContext;const api=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);return {secure,api};}
+async function explainCameraState(){const c=cameraCapability();if(!c.api){setCameraHelp('Dieser Browser-Kontext stellt getUserMedia nicht bereit. Öffne die App in aktuellem Chrome über eine HTTPS-Adresse (nicht direkt als lokale Datei aus dem Download-Ordner). Danach erneut „Kamera starten“ antippen.');return;}if(!c.secure){setCameraHelp('Die Seite ist nicht in einem sicheren Kontext geöffnet. Chrome erlaubt Kamerazugriff normalerweise nur über HTTPS oder localhost. Bitte die App über eine HTTPS-Adresse öffnen.');return;}try{if(navigator.permissions&&navigator.permissions.query){const p=await navigator.permissions.query({name:'camera'});if(p.state==='denied')setCameraHelp('Der Kamerazugriff ist für diese Seite bereits blockiert. Öffne in Chrome die Website-Einstellungen → Kamera → Zulassen. Prüfe zusätzlich die Android-Einstellungen → Apps → Chrome → Berechtigungen → Kamera.');else if(p.state==='granted')setCameraHelp('Chrome hat der Seite bereits Kamerazugriff erlaubt. Tippe auf „Kamera starten“.');else setCameraHelp('Die Kamerafreigabe ist noch nicht entschieden. Tippe auf „Kamera starten“; Chrome sollte die Freigabeabfrage anzeigen.');}}catch(_){setCameraHelp('Tippe auf „Kamera starten“, um die Kamerafreigabe anzufordern. Falls keine Abfrage erscheint, prüfe die Website-Einstellungen und Android-App-Berechtigungen für Chrome.');}}
+function renderColors(){ $('colors').innerHTML=''; names.forEach((n,i)=>{let b=document.createElement('button');b.className='colorBtn'+(i===selected?' active':'');b.innerHTML=`<i class="dot" style="background:${n[1]}"></i>${n[0]} ${cal[i]?'✓':'·'}`;b.onclick=()=>{selected=i;renderColors()};$('colors').appendChild(b)})}
+function hsv(r,g,b){r/=255;g/=255;b/=255;let mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,h=0,s=mx===0?0:d/mx,v=mx;if(d){if(mx===r)h=((g-b)/d+(g<b?6:0));else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60}return [h,s*255,v*255]}
+function calibrateAt(x,y){if(!video.videoWidth)return;const rect=canvas.getBoundingClientRect();let vx=Math.max(0,Math.min(video.videoWidth-1,Math.round(x/rect.width*video.videoWidth))),vy=Math.max(0,Math.min(video.videoHeight-1,Math.round(y/rect.height*video.videoHeight)));sample.width=9;sample.height=9;sctx.drawImage(video,vx-4,vy-4,9,9,0,0,9,9);let d=sctx.getImageData(0,0,9,9).data,arr=[];for(let i=0;i<d.length;i+=4){if(d[i+3]>0)arr.push(hsv(d[i],d[i+1],d[i+2]))}let hs=arr.filter(a=>a[1]>35).map(a=>a[0]);let hue=hs.length?hs.reduce((a,b)=>a+b,0)/hs.length:0;let sat=arr.reduce((a,b)=>a+b[1],0)/arr.length,val=arr.reduce((a,b)=>a+b[2],0)/arr.length;cal[selected]={h:hue,s:sat,v:val};renderColors();$('calStatus').textContent=`Kalibriert: ${names[selected][0]} · H ${Math.round(hue)}° · S ${Math.round(sat)} · V ${Math.round(val)}. Wähle die nächste Farbe.`;$('detect').disabled=false;}
+canvas.addEventListener('click',e=>{if(!stream)return;const r=canvas.getBoundingClientRect();calibrateAt(e.clientX-r.left,e.clientY-r.top)});
+function match(h,s,v,c,tol){if(!c)return false;if(c.s<45&&c.v<95)return v<Math.min(135,c.v+tol*1.7)&&s<Math.max(105,c.s+tol*2);if(c.s<45&&c.v>175)return v>Math.max(145,c.v-tol*1.7)&&s<Math.max(110,c.s+tol*2);let dh=Math.abs(h-c.h);dh=Math.min(dh,360-dh);return dh<tol&&Math.abs(s-c.s)<Math.max(85,tol*2.4)&&Math.abs(v-c.v)<Math.max(95,tol*2.5)&&s>55}
+function analyze(){if(!running||video.readyState<2)return;const w=canvas.width=video.videoWidth,h=canvas.height=video.videoHeight;ctx.clearRect(0,0,w,h);ctx.drawImage(video,0,0,w,h);let data=ctx.getImageData(0,0,w,h),d=data.data;const step=3,gw=Math.floor(w/step),gh=Math.floor(h/step),tol=+$('tol').value,found=[];let masks={};
+for(let ci=0;ci<6;ci++){if(!cal[ci])continue;let mask=new Uint8Array(gw*gh);for(let yy=0;yy<gh;yy++){let py=yy*step;for(let xx=0;xx<gw;xx++){let p=(py*w+xx*step)*4,[hh,ss,vv]=hsv(d[p],d[p+1],d[p+2]);if(match(hh,ss,vv,cal[ci],tol))mask[yy*gw+xx]=1}}
+let seen=new Uint8Array(mask.length),blobs=[];for(let k=0;k<mask.length;k++){if(!mask[k]||seen[k])continue;let q=[k],head=0;seen[k]=1;let count=0,sx=0,sy=0,minx=gw,miny=gh,maxx=0,maxy=0;while(head<q.length){let z=q[head++],xx=z%gw,yy=(z/gw)|0;count++;sx+=xx;sy+=yy;minx=Math.min(minx,xx);maxx=Math.max(maxx,xx);miny=Math.min(miny,yy);maxy=Math.max(maxy,yy);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){let nx=xx+dx,ny=yy+dy;if(nx<0||ny<0||nx>=gw||ny>=gh)continue;let ni=ny*gw+nx;if(mask[ni]&&!seen[ni]){seen[ni]=1;q.push(ni)}}}if(count>=5&&count<Math.min(1800,gw*gh*.12))blobs.push({count,cx:sx/count*step,cy:sy/count*step,x:minx*step,y:miny*step,bw:(maxx-minx+1)*step,bh:(maxy-miny+1)*step})}
+blobs.sort((a,b)=>b.count-a.count);if(blobs[0])found.push({ci,...blobs[0]});}
+ctx.lineWidth=Math.max(2,w/500);found.forEach(o=>{let col=names[o.ci][1];ctx.strokeStyle=col;ctx.fillStyle=col;ctx.strokeRect(o.x,o.y,o.bw,o.bh);ctx.beginPath();ctx.arc(o.cx,o.cy,Math.max(7,w/100),0,Math.PI*2);ctx.stroke();ctx.font=`bold ${Math.max(14,w/40)}px system-ui`;ctx.fillText(names[o.ci][0],o.x,o.y-5)});
+const lineY=h*(+$('linePos').value/100);
+ctx.save();ctx.strokeStyle='#facc15';ctx.lineWidth=Math.max(3,w/320);ctx.setLineDash([14,10]);ctx.beginPath();ctx.moveTo(0,lineY);ctx.lineTo(w,lineY);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#facc15';ctx.font=`bold ${Math.max(13,w/45)}px system-ui`;ctx.fillText('START / ZIEL',10,Math.max(18,lineY-9));ctx.restore();
+if(raceOn){const now=performance.now();for(const o of found){const r=raceData[o.ci], y=o.cy; if(r.previousY!==null){const crossed=(r.previousY<lineY&&y>=lineY)||(r.previousY>lineY&&y<=lineY);if(crossed&&now-r.lastCross>1600){r.lastCross=now;r.laps++;if(r.lastLapAt>0){const lap=now-r.lastLapAt;if(lap>1000&&lap<300000){r.lastLapMs=lap;r.best=r.best===null?lap:Math.min(r.best,lap);}r.lastLapAt=now;}else{r.lastLapAt=now;}const target=+$('lapTarget').value;if(target>0&&r.laps>=target){$('lapHint').textContent=names[o.ci][0]+' hat '+target+' Runden erreicht.';}}}r.previousY=y;} }
+latest=found;$('found').textContent=`${found.length} / 6`;$('results').innerHTML=names.map((n,i)=>{let f=found.find(x=>x.ci===i);return `<div style="display:inline-flex;align-items:center;gap:6px;margin:4px 12px 4px 0"><i class="dot" style="background:${n[1]}"></i><b>${n[0]}:</b> ${!cal[i]?'nicht kalibriert':f?`erkannt · x ${Math.round(f.cx)}, y ${Math.round(f.cy)}`:'nicht im Bild erkannt'}</div>`}).join('');if(!raceOn)renderRace();frames++;let now=performance.now();if(now-fpsAt>=1000){$('fps').textContent=Math.round(frames*1000/(now-fpsAt));frames=0;fpsAt=now}raf=requestAnimationFrame(analyze)}
+$('start').onclick=async()=>{
+ const cap=cameraCapability();
+ if(!cap.api){setStatus('Kamerazugriff im aktuellen Browser-Kontext nicht verfügbar');await explainCameraState();return;}
+ if(!cap.secure){setStatus('Sichere Verbindung erforderlich');await explainCameraState();return;}
+ setStatus('Fordere Kamerafreigabe an …');setCameraHelp('Chrome sollte jetzt die Frage anzeigen, ob diese Seite die Kamera verwenden darf. Wähle „Zulassen“.');
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60,max:60}}});
+  video.srcObject=stream;await video.play();$('placeholder').style.display='none';$('start').disabled=true;$('stop').disabled=false;$('detect').disabled=false;$('resolution').textContent=video.videoWidth+'×'+video.videoHeight;setStatus('Kamera läuft – tippe zum Kalibrieren auf einen Farbpunkt');setCameraHelp('Kamerafreigabe erteilt. Du kannst jetzt die farbigen Dachmarkierungen im Bild kalibrieren.');running=true;analyze();
+ }catch(e){
+  stream=null;let msg='Kamerafehler: '+(e.message||e.name);
+  if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError'){msg='Kamerafreigabe verweigert oder blockiert';setCameraHelp('Erlaube die Kamera in Chrome: Website-Informationen neben der Adressleiste → Berechtigungen → Kamera → Zulassen. Prüfe außerdem Android: Einstellungen → Apps → Chrome → Berechtigungen → Kamera → Zulassen. Lade danach die Seite neu.');}
+  else if(e.name==='NotFoundError'){msg='Keine Kamera gefunden';setCameraHelp('Das Tablet meldet keine verfügbare Kamera. Prüfe, ob eine andere App die Kamera blockiert.');}
+  else if(e.name==='NotReadableError'){msg='Kamera ist belegt oder kann nicht gestartet werden';setCameraHelp('Schließe andere Apps, die die Kamera verwenden, und versuche es erneut.');}
+  else if(e.name==='OverconstrainedError'){msg='Gewünschte Kameraeinstellungen werden nicht unterstützt';setCameraHelp('Die Kamera unterstützt die angeforderte Auflösung oder Bildrate nicht. Wir können die Kameraeinstellungen im nächsten Schritt vereinfachen.');}
+  setStatus(msg);
+ }
+};
+$('stop').onclick=()=>{running=false;cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;ctx.clearRect(0,0,canvas.width,canvas.height);$('placeholder').style.display='block';$('start').disabled=false;$('stop').disabled=true;setStatus('Kamera gestoppt');if(raceOn){raceElapsed=raceNow();raceOn=false;cancelAnimationFrame(raceTick);$('raceState').textContent='Gestoppt';$('raceStart').disabled=false;$('racePause').disabled=true;}};
+$('detect').onclick=()=>{if(!stream){setStatus('Bitte zuerst die Kamera starten');return}running=true;analyze();setStatus('Farberkennung aktiv – erkannte Markierungen werden eingerahmt')};$('clear').onclick=()=>{cal={};renderColors();$('calStatus').textContent='Kalibrierung gelöscht.';$('detect').disabled=!stream;$('results').textContent='Nach der Kalibrierung erscheinen hier die erkannten Farbmarkierungen.';$('found').textContent='0 / 6'};
+$('tol').oninput=()=>{$('tolVal').textContent=$('tol').value};
+$('linePos').oninput=()=>{$('lineVal').textContent=$('linePos').value};
+$('raceStart').onclick=()=>{if(!stream){$('lapHint').textContent='Bitte zuerst die Kamera starten.';return;}if(!Object.keys(cal).length){$('lapHint').textContent='Bitte zuerst mindestens eine Fahrzeugfarbe kalibrieren.';return;}if(!raceOn){raceOn=true;raceStartAt=performance.now();$('raceState').textContent='Läuft';$('raceStart').disabled=true;$('racePause').disabled=false;raceData.forEach(r=>{r.previousY=null;r.lastLapAt=0});raceLoop();}};
+$('racePause').onclick=()=>{if(raceOn){raceElapsed=raceNow();raceOn=false;cancelAnimationFrame(raceTick);$('raceState').textContent='Pausiert';$('raceStart').disabled=false;$('raceStart').textContent='Weiter';$('racePause').disabled=true;}};
+$('raceReset').onclick=()=>{$('raceStart').textContent='Rennen starten';$('lapHint').textContent='Rennzähler zurückgesetzt.';resetRace();};
+renderColors();renderRace();
+explainCameraState();
+})();
+</script><script>if('serviceWorker' in navigator && location.protocol.startsWith('http')){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}</script>
+</body></html>
