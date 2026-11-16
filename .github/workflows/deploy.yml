@@ -32,8 +32,17 @@ jobs:
           node-version: 22
 
       - name: Extract project
+        run: unzip slot-racing-v0.4-github.zip -d project
+
+      - name: Fix escaped newline
         run: |
-          unzip slot-racing-v0.4-github.zip -d project
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("project/slot-racing-pwa-development/src/App.tsx")
+          s = p.read_text()
+          s = s.replace(r';\nimport LapHistory', ';\nimport LapHistory')
+          p.write_text(s)
+          PY
 
       - name: Install dependencies
         working-directory: project/slot-racing-pwa-development
