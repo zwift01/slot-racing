@@ -1,0 +1,60 @@
+
+name: Build and Deploy Slot Racing
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'slot-racing-v0.4-github.zip'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Extract project
+        run: |
+          unzip slot-racing-v0.4-github.zip -d project
+
+      - name: Install dependencies
+        working-directory: project/slot-racing-pwa-development
+        run: npm ci
+
+      - name: Build app
+        working-directory: project/slot-racing-pwa-development
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: project/slot-racing-pwa-development/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
